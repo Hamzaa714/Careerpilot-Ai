@@ -1,0 +1,252 @@
+// CareerPilot AI - Prisma Schema
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum PlanType {
+  FREE
+  PREMIUM
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELED
+  PAST_DUE
+  TRIALING
+  INACTIVE
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  REFUNDED
+}
+
+enum PaymentProvider {
+  STRIPE
+  JAZZCASH
+  EASYPAISA
+}
+
+enum ResumeTemplate {
+  MODERN
+  CORPORATE
+  MINIMAL
+  GOVERNMENT
+  CREATIVE
+}
+
+enum AIFeature {
+  SUMMARY
+  BULLET
+  COVER_LETTER
+  SKILL_SUGGEST
+  LINKEDIN_HEADLINE
+  LINKEDIN_ABOUT
+  INTERVIEW_QA
+  ATS_ANALYSIS
+}
+
+model User {
+  id              String   @id @default(cuid())
+  name            String?
+  email           String   @unique
+  emailVerified   DateTime?
+  image           String?
+  password        String?
+  role            Role     @default(USER)
+  plan            PlanType @default(FREE)
+  aiCreditsUsed   Int      @default(0)
+  aiCreditsLimit  Int      @default(20)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  accounts        Account[]
+  sessions        Session[]
+  resumes         Resume[]
+  coverLetters    CoverLetter[]
+  subscription    Subscription?
+  payments        Payment[]
+  aiUsage         AIUsage[]
+  savedJobs       SavedJob[]
+  interviews      InterviewSession[]
+  passwordReset   PasswordResetToken[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+  @@unique([identifier, token])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  expires   DateTime
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Resume {
+  id            String          @id @default(cuid())
+  userId        String
+  title         String
+  slug          String          @unique @default(cuid())
+  template      ResumeTemplate  @default(MODERN)
+  isPublic      Boolean         @default(false)
+  atsScore      Int             @default(0)
+  downloads     Int             @default(0)
+  shareToken    String?         @unique
+  data          Json            // full resume payload (personal, summary, etc.)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sections      ResumeSection[]
+  exports       ExportHistory[]
+}
+
+model ResumeSection {
+  id        String   @id @default(cuid())
+  resumeId  String
+  kind      String   // personal|summary|experience|education|skills|certifications|projects|languages|references
+  order     Int      @default(0)
+  payload   Json
+  resume    Resume   @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+}
+
+model CoverLetter {
+  id          String   @id @default(cuid())
+  userId      String
+  title       String
+  jobTitle    String?
+  company     String?
+  content     String   @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Subscription {
+  id                    String              @id @default(cuid())
+  userId                String              @unique
+  plan                  PlanType            @default(FREE)
+  status                SubscriptionStatus  @default(INACTIVE)
+  stripeCustomerId      String?             @unique
+  stripeSubscriptionId  String?             @unique
+  currentPeriodEnd      DateTime?
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+  user                  User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Payment {
+  id          String           @id @default(cuid())
+  userId      String
+  provider    PaymentProvider  @default(STRIPE)
+  amount      Int              // in smallest currency unit (paisa/cents)
+  currency    String           @default("PKR")
+  status      PaymentStatus    @default(PENDING)
+  reference   String?          @unique
+  metadata    Json?
+  createdAt   DateTime         @default(now())
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model AIUsage {
+  id        String     @id @default(cuid())
+  userId    String
+  feature   AIFeature
+  tokens    Int        @default(0)
+  prompt    String?    @db.Text
+  createdAt DateTime   @default(now())
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Job {
+  id          String     @id @default(cuid())
+  title       String
+  company     String
+  location    String
+  type        String     // full-time, part-time, remote, contract
+  description String     @db.Text
+  skills      String[]
+  salaryMin   Int?
+  salaryMax   Int?
+  currency    String     @default("PKR")
+  applyUrl    String?
+  postedAt    DateTime   @default(now())
+  expiresAt   DateTime?
+  isActive    Boolean    @default(true)
+  saved       SavedJob[]
+}
+
+model SavedJob {
+  id        String   @id @default(cuid())
+  userId    String
+  jobId     String
+  status    String   @default("saved") // saved|applied|interview|offer|rejected
+  notes     String?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  @@unique([userId, jobId])
+}
+
+model InterviewSession {
+  id         String   @id @default(cuid())
+  userId     String
+  role       String
+  category   String   // technical|hr|behavioral
+  questions  Json     // [{q, a, feedback}]
+  score      Int?
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ExportHistory {
+  id         String   @id @default(cuid())
+  resumeId   String
+  format     String   @default("pdf")
+  createdAt  DateTime @default(now())
+  resume     Resume   @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+}
