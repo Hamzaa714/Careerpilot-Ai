@@ -1,5 +1,6 @@
 "use client";
-import { useState, useActionState, useEffect } from "react";
+import { useState, useEffect } from "react";
+import { useFormState, useFormStatus } from "react-dom";
 import { toast } from "sonner";
 import { createResume } from "../actions";
 import { Card } from "@/components/ui/card";
@@ -27,9 +28,18 @@ const TEMPLATES = [
     { id: "CREATIVE", label: "Creative", desc: "Gradient header, timeline experience", color: "#ec4899" },
 ];
 
+function SubmitButton() {
+    const { pending } = useFormStatus();
+    return (
+        <Button variant="gradient" className="w-full" disabled={pending}>
+            {pending ? "Creating…" : "Create resume"}
+        </Button>
+    );
+}
+
 export default function NewResumePage() {
     const [selected, setSelected] = useState("MODERN");
-    const [error, formAction, pending] = useActionState(createResumeAction, null);
+    const [error, formAction] = useFormState(createResumeAction, null);
 
     useEffect(() => {
         if (error) toast.error(error);
@@ -115,9 +125,7 @@ export default function NewResumePage() {
                         <Label>Resume title</Label>
                         <Input name="title" placeholder="e.g. Frontend Engineer Resume" required />
                     </div>
-                    <Button variant="gradient" className="w-full" disabled={pending}>
-                        {pending ? "Creating…" : "Create resume"}
-                    </Button>
+                    <SubmitButton />
                 </form>
             </Card>
         </div>
